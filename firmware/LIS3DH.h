@@ -1,5 +1,5 @@
-#ifndef __LIS30DH_H
-#define __LIS30DH_H
+#ifndef __LIS3DH_H
+#define __LIS3DH_H
 
 // Interface to the LIS30DH accelerometer used on the Particle AssetTracker for Electron
 // This is similar to the API for the ADXL362DMA driver I wrote for that accelerometer
@@ -14,16 +14,36 @@
 // Extremely helpful application note:
 // http://www.st.com/resource/en/application_note/cd00290365.pdf
 
-class LIS30DH {
+class LIS3DH {
 public:
-	LIS30DH(SPIClass &spi, int ss = A2, int intPin = -1);
-	virtual ~LIS30DH();
+	LIS3DH(SPIClass &spi, int ss = A2, int intPin = -1);
+	virtual ~LIS3DH();
 
-	bool setupLowPowerWakeMode();
+	/**
+	 * Initializes the device in low power wake on movement mode
+	 */
+	bool setupLowPowerWakeMode(uint8_t movementThreshold = 16);
 
-	uint8_t readInt1Src() { return readRegister8(REG_INT1_SRC); }
 
+	/**
+	 * After getting an interrupt, call this to read the interrupt status and clear the interrupt
+	 * The resulting value is the value of the INT1_SRC register.
+	 */
 	uint8_t clearInterrupt();
+
+	/**
+	 * Enables the temperature sensor. Call once, usually when you call setupLowPowerWakeMode.
+	 */
+	void enableTemperature(boolean enable = true);
+
+	/**
+	 * Gets the temperature of the sensor in degrees C
+	 *
+	 * Make sure you call enableTemperature() at when you're setting the modes, because it seems
+	 * to take a while to start up, you can't just keep turning it on and off all the time,
+	 * apparently.
+	 */
+	int16_t getTemperature();
 
 	/**
 	 * Reads an 8-bit register value
@@ -183,6 +203,8 @@ public:
 	static const uint8_t INT1_SRC_XH = 0x02;
 	static const uint8_t INT1_SRC_XL = 0x01;
 
+	static const uint8_t TEMP_CFG_ADC_PD = 0x80;
+	static const uint8_t TEMP_CFG_TEMP_EN = 0x40;
 
 private:
 
@@ -194,7 +216,7 @@ private:
 	SPIClass &spi; // Typically SPI or SPI1
 	int ss;		// SS or /CS chip select pin. Default: A2
 	int intPin; // Pin connected to INT1 on the accelerometer (-1 = not connected)
-	bool busy;
+	bool busy = false;
 	uint8_t int1_cfg; // What we set as INT1_CFG
 };
 

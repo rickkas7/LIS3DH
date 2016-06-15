@@ -1,7 +1,7 @@
 
 #include "Particle.h"
 
-#include "LIS30DH/LIS30DH.h"
+#include "LIS3DH/LIS3DH.h"
 
 // Project Location:
 
@@ -11,7 +11,7 @@ SYSTEM_THREAD(ENABLED);
 
 // Global objects
 FuelGauge batteryMonitor;
-LIS30DH myAccel(SPI, A2, WKP);
+LIS3DH myAccel(SPI, A2, WKP);
 
 // This is the name of the Particle event to publish for battery or movement detection events
 // It is a private event.
@@ -35,7 +35,6 @@ void setup() {
 
 
 void loop() {
-	uint8_t status;
 
 	switch(state) {
 	case ONLINE_WAIT_STATE:
@@ -56,6 +55,8 @@ void loop() {
 			state = IDLE_STATE;
 			break;
 		}
+		myAccel.enableTemperature();
+
 		state = BOOT_WAIT_STATE;
 		break;
 
@@ -68,7 +69,8 @@ void loop() {
 			char data[32];
 			float cellVoltage = batteryMonitor.getVCell();
 			float stateOfCharge = batteryMonitor.getSoC();
-			snprintf(data, sizeof(data), "%d,%.02f,%.02f", awake, cellVoltage, stateOfCharge);
+			int16_t temp = myAccel.getTemperature();
+			snprintf(data, sizeof(data), "%d,%.02f,%.02f,%d", awake, cellVoltage, stateOfCharge, temp);
 
 			Particle.publish(eventName, data, 60, PRIVATE);
 
@@ -121,8 +123,9 @@ void loop() {
 			stateTime = millis();
 
 			if (digitalRead(WKP) == HIGH) {
-				awake = ((myAccel.readInt1Src() & myAccel.INT1_SRC_IA) != 0);
-				Serial.printlnf("WKP=1 awake=%d", awake);
+				uint8_t regValue = myAccel.readRegister8(myAccel.REG_INT1_SRC);
+				awake = ((regValue & myAccel.INT1_SRC_IA) != 0);
+				Serial.printlnf("WKP=1 awake=%d INT1_SRC=%02x", awake, regValue);
 			}
 		}
 		break;
