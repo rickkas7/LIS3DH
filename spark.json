@@ -1,0 +1,7 @@
+{
+    "name": "LIS30DH",
+    "version": "0.0.1",
+    "author": "Rick Kaseguma <rickkas7@rickk.com>",
+    "license": "MIT",
+    "description": "LIS30DH accelerometer driver"
+}
