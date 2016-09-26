@@ -3,7 +3,10 @@
 
 #include "LIS3DH/LIS3DH.h"
 
-// Project Location:
+// Example of Wake On Move with the AssetTracker and the Electron
+//
+// Official project location:
+// https://github.com/rickkas7/LIS3DH
 
 
 // System threading is required for this project
@@ -11,7 +14,7 @@ SYSTEM_THREAD(ENABLED);
 
 // Global objects
 FuelGauge batteryMonitor;
-LIS3DH myAccel(SPI, A2, WKP);
+LIS3DHSPI accel(SPI, A2, WKP);
 
 // This is the name of the Particle event to publish for battery or movement detection events
 // It is a private event.
@@ -21,10 +24,12 @@ const char *eventName = "accel";
 const unsigned long MAX_TIME_TO_PUBLISH_MS = 60000; // Only stay awake for 60 seconds trying to connect to the cloud and publish
 const unsigned long TIME_AFTER_PUBLISH_MS = 4000; // After publish, wait 4 seconds for data to go out
 const unsigned long TIME_AFTER_BOOT_MS = 5000; // At boot, wait 5 seconds before going to sleep again (after coming online)
-const unsigned long TIME_PUBLISH_BATTERY_SEC = 4 * 60 * 60; // every 4 hours, send a battery update
+const unsigned long TIME_PUBLISH_BATTERY_SEC = 22 * 60; // every 22 minutes send a battery update to keep the cellular connection up
+
+const uint8_t movementThreshold = 16;
 
 // Stuff for the finite state machine
-enum State { ONLINE_WAIT_STATE, RESET_STATE, RESET_WAIT_STATE, PUBLISH_STATE, SLEEP_STATE, SLEEP_WAIT_STATE, BOOT_WAIT_STATE, IDLE_STATE };
+enum State { ONLINE_WAIT_STATE, RESET_STATE, RESET_WAIT_STATE, PUBLISH_STATE, SLEEP_STATE, SLEEP_WAIT_STATE, BOOT_WAIT_STATE };
 State state = ONLINE_WAIT_STATE;
 unsigned long stateTime = 0;
 int awake = 0;
@@ -47,17 +52,20 @@ void loop() {
 		}
 		break;
 
-	case RESET_STATE:
+	case RESET_STATE: {
 		Serial.println("resetting accelerometer");
 
-		if (!myAccel.setupLowPowerWakeMode()) {
+		LIS3DHConfig config;
+		config.setLowPowerWakeMode(16);
+
+		if (!accel.setup(config)) {
 			Serial.println("accelerometer not found");
-			state = IDLE_STATE;
+			state = SLEEP_STATE;
 			break;
 		}
-		myAccel.enableTemperature();
 
 		state = BOOT_WAIT_STATE;
+		}
 		break;
 
 	case PUBLISH_STATE:
@@ -69,8 +77,7 @@ void loop() {
 			char data[32];
 			float cellVoltage = batteryMonitor.getVCell();
 			float stateOfCharge = batteryMonitor.getSoC();
-			int16_t temp = myAccel.getTemperature();
-			snprintf(data, sizeof(data), "%d,%.02f,%.02f,%d", awake, cellVoltage, stateOfCharge, temp);
+			snprintf(data, sizeof(data), "%d,%.02f,%.02f", awake, cellVoltage, stateOfCharge);
 
 			Particle.publish(eventName, data, 60, PRIVATE);
 
@@ -102,6 +109,11 @@ void loop() {
 		break;
 
 	case SLEEP_STATE:
+		// Wait for Electron to stop moving for 2 seconds so we can recalibrate the accelerometer
+		accel.calibrateFilter(2000);
+
+		Serial.println("going to sleep");
+
 		// Sleep
 		System.sleep(WKP, RISING, TIME_PUBLISH_BATTERY_SEC, SLEEP_NETWORK_STANDBY);
 
@@ -109,7 +121,7 @@ void loop() {
 		// immediately coming out of sleep.
 		delay(500);
 
-		awake = ((myAccel.clearInterrupt() & myAccel.INT1_SRC_IA) != 0);
+		awake = ((accel.clearInterrupt() & LIS3DH::INT1_SRC_IA) != 0);
 
 		Serial.printlnf("awake=%d", awake);
 
@@ -117,18 +129,6 @@ void loop() {
 		stateTime = millis();
 		break;
 
-	case IDLE_STATE:
-		// This is handy for testing - instead of going into sleep go into idle
-		if (millis() - stateTime > 1000) {
-			stateTime = millis();
-
-			if (digitalRead(WKP) == HIGH) {
-				uint8_t regValue = myAccel.readRegister8(myAccel.REG_INT1_SRC);
-				awake = ((regValue & myAccel.INT1_SRC_IA) != 0);
-				Serial.printlnf("WKP=1 awake=%d INT1_SRC=%02x", awake, regValue);
-			}
-		}
-		break;
 	}
 
 }

@@ -2,32 +2,71 @@
 #include "Particle.h"
 #include "LIS3DH/LIS3DH.h"
 
-#if PLATFORM_THREADING
-static Mutex syncCallbackMutex;
-#else
-// On the core, there is no mutex support
-static volatile bool syncCallbackDone;
-#endif
+// Official project location:
+// https://github.com/rickkas7/LIS3DH
 
-
-LIS3DH::LIS3DH(SPIClass &spi, int ss, int intPin) : spi(spi), ss(ss), intPin(intPin) {
-	spi.begin(ss);
-
-	// This initialization possibly should go in beginTransaction() for compatibility with SPI
-	// bus sharing in different modes, but it seems to require an indeterminate delay to take
-	// effect, otherwise the operations fail. Since SPI bus sharing across modes tends not to
-	// work with other devices, anyway, I put the code here.
-	spi.setBitOrder(MSBFIRST);
-	spi.setClockSpeed(1, MHZ);
-	spi.setDataMode(SPI_MODE0); // CPHA = 0, CPOL = 0 : MODE = 0
+LIS3DHConfig::LIS3DHConfig() {
 }
+
+LIS3DHConfig &LIS3DHConfig::setLowPowerWakeMode(uint8_t movementThreshold) {
+	// Enable 10 Hz, low power, with XYZ detection enabled
+	reg1 = LIS3DH::CTRL_REG1_ODR1 | LIS3DH::CTRL_REG1_LPEN | LIS3DH::CTRL_REG1_ZEN | LIS3DH::CTRL_REG1_YEN | LIS3DH::CTRL_REG1_XEN;
+
+	// Enable high-pass filter
+	reg2 = LIS3DH::CTRL_REG2_FDS | LIS3DH::CTRL_REG2_HPIS1;
+
+	// Enable INT1
+	reg3 = LIS3DH::CTRL_REG3_I1_INT1;
+
+	// Disable FIFO, enable latch interrupt on INT1_SRC
+	reg5 = LIS3DH::CTRL_REG5_LIR_INT1;
+
+	// 250 mg threshold = 16
+	int1_ths = movementThreshold;
+
+	int1_cfg = LIS3DH::INT1_CFG_YHIE_YUPE | LIS3DH::INT1_CFG_XHIE_XUPE;
+
+	return *this;
+}
+
+LIS3DHConfig &LIS3DHConfig::setAccelMode(uint8_t rate) {
+
+	// Enable specified rate, with XYZ detection enabled
+	reg1 = rate | LIS3DH::CTRL_REG1_ZEN | LIS3DH::CTRL_REG1_YEN | LIS3DH::CTRL_REG1_XEN;
+
+	return *this;
+}
+
+LIS3DHConfig &LIS3DHConfig::setPositionInterrupt(uint8_t movementThreshold) {
+	// Enable specified rate, with XYZ detection enabled
+	reg1 = LIS3DH::RATE_100_HZ | LIS3DH::CTRL_REG1_ZEN | LIS3DH::CTRL_REG1_YEN | LIS3DH::CTRL_REG1_XEN;
+
+	// Enable INT1
+	reg3 = LIS3DH::CTRL_REG3_I1_INT1;
+
+	int1_ths = movementThreshold;
+
+	// For position detection, enable both AOI and 6D
+	int1_cfg = LIS3DH::INT1_CFG_AOI | LIS3DH::INT1_CFG_6D |
+			LIS3DH::INT1_CFG_ZHIE_ZUPE | LIS3DH::INT1_CFG_ZLIE_ZDOWNE |
+			LIS3DH::INT1_CFG_YHIE_YUPE | LIS3DH::INT1_CFG_YLIE_YDOWNE |
+			LIS3DH::INT1_CFG_XHIE_XUPE | LIS3DH::INT1_CFG_XLIE_XDOWNE;
+
+	return *this;
+}
+
+
+LIS3DH::LIS3DH(int intPin) : intPin(intPin) {
+
+}
+
 
 LIS3DH::~LIS3DH() {
 
 }
 
-bool LIS3DH::setupLowPowerWakeMode(uint8_t movementThreshold) {
 
+bool LIS3DH::hasDevice() {
 	bool found = false;
 	for(int tries = 0; tries < 10; tries++) {
 		uint8_t whoami = readRegister8(REG_WHO_AM_I);
@@ -37,65 +76,98 @@ bool LIS3DH::setupLowPowerWakeMode(uint8_t movementThreshold) {
 		}
 		delay(1);
 	}
-	if (!found) {
+	return found;
+}
+
+bool LIS3DH::setup(LIS3DHConfig &config) {
+
+	if (!hasDevice()) {
+		Serial.println("device not found");
 		return false;
 	}
 
-	// Enable 10 Hz, low power, with XYZ detection enabled
-	writeRegister8(REG_CTRL_REG1, CTRL_REG1_ODR1 | CTRL_REG1_LPEN | CTRL_REG1_ZEN | CTRL_REG1_YEN | CTRL_REG1_XEN);
+	writeRegister8(REG_CTRL_REG1, config.reg1);
+	writeRegister8(REG_CTRL_REG2, config.reg2);
+	writeRegister8(REG_CTRL_REG3, config.reg3);
+	writeRegister8(REG_CTRL_REG4, config.reg4);
+	writeRegister8(REG_CTRL_REG5, config.reg5);
+	writeRegister8(REG_CTRL_REG6, config.reg6);
 
-	// High pass filters disabled
-	// Enable reference mode CTRL_REG2_HPM0 | CTRL_REG2_HPIS1
-	// Tried enabling CTRL_REG2_HPM0 | CTRL_REG2_HPM1 for auto-reset, did not seem to help
-	writeRegister8(REG_CTRL_REG2, 0);
-
-	// Enable INT1
-	writeRegister8(REG_CTRL_REG3, CTRL_REG3_I1_INT1);
-
-	// Disable high resolution mode
-	writeRegister8(REG_CTRL_REG4, 0);
-
-	// Page 12 of the app note says to do this last, but page 25 says to do them in order.
-	// Disable FIFO, enable latch interrupt on INT1_SRC
-	writeRegister8(REG_CTRL_REG5, CTRL_REG5_LIR_INT1);
-
-	// CTRL_REG6_H_LACTIVE means active low, not needed here
-	writeRegister8(REG_CTRL_REG6, 0);
-
-	// In normal mode, reading the reference register sets it for the current normal force
-	// (the normal force of gravity acting on the device)
-	readRegister8(REG_REFERENCE);
-
-	// 250 mg threshold = 16
-	writeRegister8(REG_INT1_THS, movementThreshold);
-
-	//
-	writeRegister8(REG_INT1_DURATION, 0);
-
-
-	if (intPin >= 0) {
-		// There are instructions to set the INT1_CFG in a loop in the appnote on page 24. As far
-		// as I can tell this never works. Merely setting the INT1_CFG does not ever generate an
-		// interrupt for me.
-
-		// Remember the INT1_CFG setting because we're apparently supposed to set it again after
-		// clearing an interrupt.
-		int1_cfg = INT1_CFG_YHIE_YUPE | INT1_CFG_XHIE_XUPE;
-		writeRegister8(REG_INT1_CFG, int1_cfg);
-
-		// Clear the interrupt just in case
-		readRegister8(REG_INT1_SRC);
+	if (config.setReference) {
+		// In normal mode, reading the reference register sets it for the current normal force
+		// (the normal force of gravity acting on the device)
+		readRegister8(REG_REFERENCE);
 	}
-	else {
-		int1_cfg = 0;
-		writeRegister8(REG_INT1_CFG, 0);
+	// Set FIFO mode
+	writeRegister8(REG_FIFO_CTRL_REG, config.fifoCtrlReg);
+
+
+
+	if ((config.reg3 & CTRL_REG3_I1_INT1) != 0) {
+
+		writeRegister8(REG_INT1_THS, config.int1_ths);
+		writeRegister8(REG_INT1_DURATION, config.int1_duration);
+
+		if (intPin >= 0) {
+			// There are instructions to set the INT1_CFG in a loop in the appnote on page 24. As far
+			// as I can tell this never works. Merely setting the INT1_CFG does not ever generate an
+			// interrupt for me.
+
+			// Remember the INT1_CFG setting because we're apparently supposed to set it again after
+			// clearing an interrupt.
+			int1_cfg = config.int1_cfg;
+			writeRegister8(REG_INT1_CFG, int1_cfg);
+
+			// Clear the interrupt just in case
+			readRegister8(REG_INT1_SRC);
+		}
+		else {
+			int1_cfg = 0;
+			writeRegister8(REG_INT1_CFG, 0);
+		}
 	}
+
+
+
 
 	return true;
 }
 
+
+bool LIS3DH::calibrateFilter(unsigned long stationaryTime, unsigned long maxWaitTime) {
+	bool ready = false;
+
+	unsigned long start = millis();
+	unsigned long lastMovement = start;
+	unsigned long lastRecalibrate = start - RECALIBRATION_MOVEMENT_DELAY;
+
+	while(maxWaitTime == 0 || millis() - start < maxWaitTime) {
+		uint8_t int1_src = readRegister8(REG_INT1_SRC);
+		if ((int1_src & INT1_SRC_IA) != 0) {
+			Serial.printlnf("resetting lastMovement int1_src=0x%x", int1_src);
+			lastMovement = lastRecalibrate = millis();
+			clearInterrupt();
+		}
+
+		if (lastRecalibrate != 0 && millis() - lastRecalibrate >= RECALIBRATION_MOVEMENT_DELAY) {
+			Serial.println("recalibrating");
+			lastRecalibrate = 0;
+			readRegister8(REG_REFERENCE);
+			clearInterrupt();
+		}
+
+		if (millis() - lastMovement >= stationaryTime) {
+			ready = true;
+			break;
+		}
+	}
+
+	return ready;
+}
+
 uint8_t LIS3DH::clearInterrupt() {
 	uint8_t int1_src = readRegister8(REG_INT1_SRC);
+	writeRegister8(REG_INT1_CFG, int1_cfg);
 
 	if (intPin >= 0) {
 		while(digitalRead(intPin) == HIGH) {
@@ -122,96 +194,233 @@ int16_t LIS3DH::getTemperature() {
 	return result;
 }
 
+
+bool LIS3DH::getSample(LIS3DHSample &sample) {
+	uint8_t statusAuxReg = readRegister8(REG_STATUS_AUX);
+
+	bool hasData = ((statusAuxReg & STATUS_AUX_321DA) != 0);
+
+	//Serial.printlnf("fifoSrcReg=0x%02x", fifoSrcReg);
+
+	if (hasData) {
+		uint8_t resp[6];
+		readData(REG_OUT_X_L, resp, sizeof(resp));
+
+		sample.x = (int16_t) (resp[0] | (((uint16_t)resp[1]) << 8));
+		sample.y = (int16_t) (resp[2] | (((uint16_t)resp[3]) << 8));
+		sample.z = (int16_t) (resp[4] | (((uint16_t)resp[5]) << 8));
+	}
+	return hasData;
+}
+
+uint8_t LIS3DH::readPositionInterrupt() {
+	uint8_t pos = 0;
+	uint8_t int1_src = readRegister8(REG_INT1_SRC);
+
+	if (int1_src & INT1_SRC_IA) {
+		// Clear the IA bit so we only have to test the XYZ flags
+		int1_src &= ~INT1_SRC_IA;
+
+		// See page 28 of the Application Note AN3308 for more information.
+		if (int1_src == INT1_SRC_YL) {
+			pos = 1; // case a
+		}
+		else
+		if (int1_src == INT1_SRC_XH) {
+			pos = 2; // case b
+		}
+		else
+		if (int1_src == INT1_SRC_XL) {
+			pos = 3; // case c
+		}
+		else
+		if (int1_src == INT1_SRC_YH) {
+			pos = 4; // case d
+		}
+		else
+		if (int1_src == INT1_SRC_ZH) {
+			pos = 5; // case e - normal case sitting flat
+		}
+		else
+		if (int1_src == INT1_SRC_ZL) {
+			pos = 6; // case f - upside down
+		}
+	}
+
+	return pos;
+}
+
+
 uint8_t LIS3DH::readRegister8(uint8_t addr) {
-	uint8_t req[2], resp[2];
 
-	req[0] = SPI_READ | addr;
-	req[1] = 0;
+	uint8_t resp[1];
+	readData(addr, resp, sizeof(resp));
 
-	syncTransaction(req, resp, sizeof(req));
-
-	return resp[1];
+	return resp[0];
 }
 
 uint16_t LIS3DH::readRegister16(uint8_t addr) {
-	uint8_t req[3], resp[3];
 
-	req[0] = SPI_READ | SPI_INCREMENT | addr;
-	req[1] = req[2] = 0;
+	uint8_t resp[2];
+	readData(addr, resp, sizeof(resp));
 
-	syncTransaction(req, resp, sizeof(req));
-
-	return resp[1] | (((uint16_t)resp[2]) << 8);
+	return resp[0] | (((uint16_t)resp[1]) << 8);
 }
 
 
 void LIS3DH::writeRegister8(uint8_t addr, uint8_t value) {
 	// Serial.printlnf("writeRegister addr=%02x value=%02x", addr, value);
 
-	uint8_t req[2], resp[2];
+	uint8_t req[1];
+	req[0] = value;
 
-	req[0] = addr;
-	req[1] = value;
-
-	syncTransaction(req, resp, sizeof(req));
+	writeData(addr, req, sizeof(req));
 }
 
 void LIS3DH::writeRegister16(uint8_t addr, uint16_t value) {
 	// Serial.printlnf("writeRegister addr=%02x value=%04x", addr, value);
 
-	uint8_t req[3], resp[3];
+	uint8_t req[2];
+	req[0] = value & 0xff;
+	req[1] = value >> 8;
 
-	req[0] = SPI_INCREMENT | addr;
-	req[1] = value & 0xff;
-	req[2] = value >> 8;
-
-	syncTransaction(req, resp, sizeof(req));
+	writeData(addr, req, sizeof(req));
 }
 
 
+//
+//
+//
 
-void LIS3DH::beginTransaction() {
-	// See note in the constructor for LIS3DH
-	busy = true;
+LIS3DHSPI::LIS3DHSPI(SPIClass &spi, int ss, int intPin) : LIS3DH(intPin), spi(spi), ss(ss) {
+
+	spi.begin(ss);
+
+	if (!spiShared) {
+		spiSetup();
+	}
+}
+
+LIS3DHSPI::~LIS3DHSPI() {
+}
+
+void LIS3DHSPI::spiSetup() {
+	// The maximum SPI clock speed is 10 MHz. You can make it lower if needed
+
+	spi.setBitOrder(MSBFIRST);
+	spi.setClockSpeed(10, MHZ);
+	spi.setDataMode(SPI_MODE0); // CPHA = 0, CPOL = 0 : MODE = 0
+}
+
+void LIS3DHSPI::beginTransaction() {
+
+	// This doesn't work. It should, but it doesn't, and I'm not sure why.
+	if (spiShared) {
+		spiSetup();
+		// delay(10);
+	}
+
 	digitalWrite(ss, LOW);
+
+	// The SPI CS setup time tsu(CS) is 6 ns, should not require a delay here
 }
 
-void LIS3DH::endTransaction() {
+void LIS3DHSPI::endTransaction() {
 	digitalWrite(ss, HIGH);
-	busy = false;
 }
 
-void LIS3DH::syncTransaction(void *req, void *resp, size_t len) {
-#if PLATFORM_THREADING
-	syncCallbackMutex.lock();
-
+bool LIS3DHSPI::readData(uint8_t addr, uint8_t *buf, size_t numBytes) {
 	beginTransaction();
 
-	spi.transfer(req, resp, len, syncCallback);
-	syncCallbackMutex.lock();
+	if (numBytes > 1) {
+		addr |= SPI_INCREMENT;
+	}
 
-	endTransaction();
+	spi.transfer(SPI_READ | addr);
 
-	syncCallbackMutex.unlock();
-#else
-	syncCallbackDone = false;
-	beginTransaction();
-
-	spi.transfer(req, resp, len, syncCallback);
-
-	while(!syncCallbackDone) {
+	for(size_t ii = 0; ii < numBytes; ii++) {
+		buf[ii] = spi.transfer(0);
 	}
 
 	endTransaction();
-#endif
+
+	return true;
 }
 
-// [static]
-void LIS3DH::syncCallback(void) {
-#if PLATFORM_THREADING
-	syncCallbackMutex.unlock();
-#else
-	syncCallbackDone = true;
-#endif
+bool LIS3DHSPI::writeData(uint8_t addr, const uint8_t *buf, size_t numBytes) {
+	beginTransaction();
+
+	if (numBytes > 1) {
+		addr |= SPI_INCREMENT;
+	}
+
+	spi.transfer(addr);
+	for(size_t ii = 0; ii < numBytes; ii++) {
+		spi.transfer(buf[ii]);
+	}
+
+	endTransaction();
+
+	return true;
 }
+
+//
+//
+//
+
+LIS3DHI2C::LIS3DHI2C(TwoWire &wire, uint8_t sad0, int intPin) : LIS3DH(intPin), wire(wire), sad0(sad0) {
+
+}
+
+LIS3DHI2C::~LIS3DHI2C() {
+
+}
+
+LIS3DHI2C::LIS3DHI2C(uint8_t sad0, int intPin) : LIS3DH(intPin), wire(Wire), sad0(sad0) {
+
+}
+
+bool LIS3DHI2C::readData(uint8_t addr, uint8_t *buf, size_t numBytes) {
+	wire.beginTransmission(getI2CAddr());
+
+	if (numBytes > 1) {
+		addr |= I2C_INCREMENT;
+	}
+	wire.write(addr);
+
+	uint8_t res = wire.endTransmission();
+	if (res != 0) {
+		return false;
+	}
+
+	wire.requestFrom((int)getI2CAddr(), numBytes);
+	for(size_t ii = 0; ii < numBytes && wire.available(); ii++) {
+		buf[ii] = wire.read();
+	}
+	return true;
+}
+
+bool LIS3DHI2C::writeData(uint8_t addr, const uint8_t *buf, size_t numBytes) {
+
+	wire.beginTransmission(getI2CAddr());
+
+	if (numBytes > 1) {
+		addr |= I2C_INCREMENT;
+	}
+	wire.write(addr);
+	for(size_t ii = 0; ii < numBytes; ii++) {
+		wire.write(buf[ii]);
+	}
+
+	uint8_t res = wire.endTransmission();
+
+	return (res == 0);
+}
+
+uint8_t LIS3DHI2C::getI2CAddr() const {
+	uint8_t addr = (0b0011000 | sad0);
+
+	return addr;
+}
+
 

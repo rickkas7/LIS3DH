@@ -1,29 +1,93 @@
 #ifndef __LIS3DH_H
 #define __LIS3DH_H
 
-// Interface to the LIS30DH accelerometer used on the Particle AssetTracker for Electron
-// This is similar to the API for the ADXL362DMA driver I wrote for that accelerometer
-
-// Note: The actual FIFO interface is not implemented yet, because I didn't need it
-// for my current project. Only the intertial wake is supported, which is probably what
-// most people will use this for.
-
+// Interface to the LIS3DH accelerometer used on the Particle AssetTracker for Electron
+// Also supports standalone devices connected by SPI or I2C
+//
 // Data sheet:
 // http://www.st.com/resource/en/datasheet/lis3dh.pdf
 //
 // Extremely helpful application note:
 // http://www.st.com/resource/en/application_note/cd00290365.pdf
+//
+// Official project location:
+// https://github.com/rickkas7/LIS3DH
 
+/**
+ * Structure to hold a single XYZ sample
+ */
+typedef struct {
+	int16_t 	x;
+	int16_t		y;
+	int16_t		z;
+} LIS3DHSample;
+
+
+/**
+ * Configuration object. You normally create one of these on the stack and then use
+ * one of the set* methods to set the mode you want to use. The object then gets
+ * passed to the setup() method. The configuration object does not need to exist
+ * after the setup method returns.
+ *
+ * This provides a way of adjusting the low-level settings. You can also use one
+ * of the setup method and tweak the settings before calling setup.
+ */
+class LIS3DHConfig {
+public:
+	LIS3DHConfig();
+
+	LIS3DHConfig &setLowPowerWakeMode(uint8_t movementThreshold);
+	LIS3DHConfig &setAccelMode(uint8_t rate);
+	LIS3DHConfig &setPositionInterrupt(uint8_t movementThreshold);
+
+	uint8_t reg1 = 0;
+	uint8_t reg2 = 0;
+	uint8_t reg3 = 0;
+	uint8_t reg4 = 0;
+	uint8_t reg5 = 0;
+	uint8_t reg6 = 0;
+	bool	setReference = false;
+	uint8_t int1_ths = 0;
+	uint8_t int1_duration = 0;
+	uint8_t int1_cfg = 0;
+	uint8_t fifoCtrlReg = 0;
+};
+
+/**
+ * The LIS3DH accelerometer object base class. You cannot instantiate one of these
+ * directly; you should instantiate either a LIS3DHSPI or LIS3DHI2C depending
+ * which interface you have connected.
+ */
 class LIS3DH {
 public:
-	LIS3DH(SPIClass &spi, int ss = A2, int intPin = -1);
+	LIS3DH(int intPin = -1);
 	virtual ~LIS3DH();
 
 	/**
-	 * Initializes the device in low power wake on movement mode
+	 * Returns true if the device can be found on the I2C or SPI bus. Uses
+	 * the WHOAMI register.
 	 */
-	bool setupLowPowerWakeMode(uint8_t movementThreshold = 16);
+	bool hasDevice();
 
+	/**
+	 * Initializes the device
+	 *
+	 * Normally you instantiate a LIS3DHConfig object on the stack and initialize it using
+	 * setupLowPowerWakeMode, setAccelMode, or setPositionInterrupt and then pass the
+	 * object to this method, possibly adjust the configuration as necessary.
+	 */
+	bool setup(LIS3DHConfig &config);
+
+
+	/**
+	 * The movement interrupt needs to be calculated to take into account gravity and its
+	 * current orientation. For this to work, the object must be stationary. You typically
+	 * call this method before putting the device to sleep for wake-on-move. The stationnaryTime
+	 * is the amount of time the device needs to be stationary, in milliseconds. Typically, you'd
+	 * wait a few seconds. The maxWaitTime is the amount of time iin milliseconds to wait for
+	 * the device to stop moving. 0 means wait forever.
+	 */
+	bool calibrateFilter(unsigned long stationaryTime, unsigned long maxWaitTime = 0);
 
 	/**
 	 * After getting an interrupt, call this to read the interrupt status and clear the interrupt
@@ -32,7 +96,7 @@ public:
 	uint8_t clearInterrupt();
 
 	/**
-	 * Enables the temperature sensor. Call once, usually when you call setupLowPowerWakeMode.
+	 * Enables the temperature sensor. Call once, usually after calling setup.
 	 */
 	void enableTemperature(boolean enable = true);
 
@@ -42,8 +106,33 @@ public:
 	 * Make sure you call enableTemperature() at when you're setting the modes, because it seems
 	 * to take a while to start up, you can't just keep turning it on and off all the time,
 	 * apparently.
+	 *
+	 * Also, the temperature sensor is horribly inaccurate.
 	 */
 	int16_t getTemperature();
+
+	/**
+	 * Get sample is used when querying x, y, z data not using the FIFO.
+	 *
+	 * The data is still only captured at the data capture rate, and this method will return false
+	 * if there is no new data to be read.
+	 */
+	bool getSample(LIS3DHSample &sample);
+
+	/**
+	 * When using position interrupt mode, returns the orientation of the device.
+	 *
+	 * 0 = not in a known position
+	 * 1 = position a
+	 * 2 = position b
+	 * 3 = position c
+	 * 4 = position d
+	 * 5 = position e = normal position facing up
+	 * 6 = position f = upside down
+	 *
+	 * See page 28 of the Application Note AN3308 for more information.
+	 */
+	uint8_t readPositionInterrupt();
 
 	/**
 	 * Reads an 8-bit register value
@@ -79,19 +168,21 @@ public:
 	 */
 	void writeRegister16(uint8_t addr, uint16_t value);
 
-	/**
-	 * Returns true if a SPI command is currently being handled
-	 */
-	bool getIsBusy() { return busy; };
 
 	/**
-	 * Begin a synchronous SPI DMI transaction
+	 * Low-level read data from the device. Implemented by subclasses.
+	 *
+	 * Normally you'd use the readRegister calls.
 	 */
-	void syncTransaction(void *req, void *resp, size_t len);
+	virtual bool readData(uint8_t addr, uint8_t *buf, size_t numBytes) = 0;
 
+	/**
+	 * Low-level write data from the device. Implemented by subclasses.
+	 *
+	 * Normally you'd use the writeRegister calls.
+	 */
+	virtual bool writeData(uint8_t addr, const uint8_t *buf, size_t numBytes) = 0;
 
-	static const uint8_t SPI_READ = 0x80;
-	static const uint8_t SPI_INCREMENT= 0x40;
 
 	static const uint8_t WHO_AM_I = 0b00110011;
 
@@ -150,6 +241,14 @@ public:
 	static const uint8_t CTRL_REG1_YEN = 0x02;
 	static const uint8_t CTRL_REG1_XEN = 0x01;
 
+	static const uint8_t RATE_1_HZ   = 0x10;
+	static const uint8_t RATE_10_HZ  = 0x20;
+	static const uint8_t RATE_25_HZ  = 0x30;
+	static const uint8_t RATE_50_HZ  = 0x40;
+	static const uint8_t RATE_100_HZ = 0x50;
+	static const uint8_t RATE_200_HZ = 0x60;
+	static const uint8_t RATE_400_HZ = 0x70;
+
 	static const uint8_t CTRL_REG2_HPM1 = 0x80;
 	static const uint8_t CTRL_REG2_HPM0 = 0x40;
 	static const uint8_t CTRL_REG2_HPCF2 = 0x20;
@@ -206,18 +305,110 @@ public:
 	static const uint8_t TEMP_CFG_ADC_PD = 0x80;
 	static const uint8_t TEMP_CFG_TEMP_EN = 0x40;
 
+	static const uint8_t FIFO_CTRL_BYPASS = 0x00;
+	static const uint8_t FIFO_CTRL_FIFO = 0x40;
+	static const uint8_t FIFO_CTRL_STREAM = 0x80;
+	static const uint8_t FIFO_CTRL_STREAM_TO_FIFO = 0xc0;
+
+	static const uint8_t FIFO_SRC_WTM = 0x80;
+	static const uint8_t FIFO_SRC_OVRN = 0x40;
+	static const uint8_t FIFO_SRC_EMPTY = 0x20;
+	static const uint8_t FIFO_SRC_FSS_MASK = 0x1f;
+
+	static const unsigned long RECALIBRATION_MOVEMENT_DELAY = 100;
+
 private:
-
-	void beginTransaction();
-	void endTransaction();
-
-	static void syncCallback(void);
-
-	SPIClass &spi; // Typically SPI or SPI1
-	int ss;		// SS or /CS chip select pin. Default: A2
 	int intPin; // Pin connected to INT1 on the accelerometer (-1 = not connected)
-	bool busy = false;
 	uint8_t int1_cfg; // What we set as INT1_CFG
 };
+
+/**
+ * Implementation of the SPI interface to the LIS3DH
+ */
+class LIS3DHSPI : public LIS3DH {
+public:
+	/**
+	 * Initialize the LIS3DH on an SPI port
+	 *
+	 * spi: specifies the SPI port (SPI, SPI1, etc.)
+	 * ss: specifies the CS pin
+	 *
+	 * If the INT pin is connected to a pin, specify which one with intPin
+	 */
+	LIS3DHSPI(SPIClass &spi, int ss = A2, int intPin = -1);
+	virtual ~LIS3DHSPI();
+
+	virtual bool readData(uint8_t addr, uint8_t *buf, size_t numBytes);
+
+	virtual bool writeData(uint8_t addr, const uint8_t *buf, size_t numBytes);
+
+	static const uint8_t SPI_READ = 0x80;
+	static const uint8_t SPI_INCREMENT= 0x40;
+
+
+private:
+	void spiSetup();
+
+	virtual void beginTransaction();
+	virtual void endTransaction();
+
+	SPIClass &spi; // Typically SPI or SPI1
+	int ss;		// SS or /CS chip select pin. Default: A2, -1 if using I2C
+	bool spiShared = false;
+
+};
+
+/**
+ * Implementation of the I2C interface to the LIS3DH
+ */
+class LIS3DHI2C : public LIS3DH {
+public:
+	/**
+	 * Initialize the LIS3DH on the any I2C port
+	 *
+	 * For the default port (Wire):
+	 * SCL: Connect to D1 (I2C SCL)
+	 * SDA: Connect to D0 (I2C SDA)
+	 *
+	 * For the Wire1 (Electron only):
+	 * SCL: Connect to C5 (I2C SCL)
+	 * SDA: Connect to D4 (I2C SDA)
+	 *
+	 * If the SDO pin is not connected or connected to ground, set sad0 to 0 (address 0x18)
+	 * If the SDO pin is connected to 3V3, set sad0 to 1 (address 0x19)
+	 *
+	 * If the INT pin is connected to a pin, specify which one with intPin
+	 */
+	LIS3DHI2C(TwoWire &wire, uint8_t sad0 = 0, int intPin = -1);
+	virtual ~LIS3DHI2C();
+
+	/**
+	 * Initialize the LIS3DH on the default I2C port (D0/D1)
+	 *
+	 * Connect:
+	 * SCL: Connect to D1 (I2C SCL)
+	 * SDA: Connect to D0 (I2C SDA)
+	 *
+	 * If the SDO pin is not connected or connected to ground, set sad0 to 0 (address 0x18)
+	 * If the SDO pin is connected to 3V3, set sad0 to 1 (address 0x19)
+	 *
+	 * If the INT pin is connected to a pin, specify which one with intPin
+	 */
+	LIS3DHI2C(uint8_t sad0 = 0, int intPin = -1);
+
+	virtual bool readData(uint8_t addr, uint8_t *buf, size_t numBytes);
+
+	virtual bool writeData(uint8_t addr, const uint8_t *buf, size_t numBytes);
+
+	static const uint8_t I2C_INCREMENT= 0x80;
+
+private:
+	uint8_t getI2CAddr() const;
+
+	TwoWire &wire; // Wire or Wire1, when using I2C mode
+	uint8_t sad0; // 0 or 1 depending on the state of the SD0/SA0 pin
+};
+
+
 
 #endif /* __LIS30DH_H */
