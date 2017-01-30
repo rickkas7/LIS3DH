@@ -32,7 +32,7 @@ To use I2C mode:
 - CS: Leave disconnected or connect to 3V3
 - SDO: I2C address selection GND or NC = 0x18, HIGH = 0x19
 
-![Electron I2C Connection](electron_i2c.png)
+![Electron I2C Connection](images/electron_i2c.jpg)
 
 
 To use SPI mode:
@@ -42,7 +42,7 @@ To use SPI mode:
 - SDO: SPI MISO, connect to A4 (SPI) or D3 (SPI1)
 - CS: SPI CS, connect to A2 (SPI) or D5 (SPI1)
 
-![Photon SPI Connection](photon.jpg)
+![Photon SPI Connection](images/photon.jpg)
 
 If you're looking at my picture, I use the following color code, arbitrarily selected but I try to be consistent about it:
 

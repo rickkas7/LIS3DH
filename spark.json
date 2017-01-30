@@ -1,7 +1,0 @@
-{
-    "name": "LIS3DH",
-    "version": "0.1.1",
-    "author": "Rick Kaseguma <rickkas7@rickk.com>",
-    "license": "MIT",
-    "description": "LIS3DH accelerometer driver"
-}

@@ -1,6 +1,6 @@
 #include "Particle.h"
 
-#include "LIS3DH/LIS3DH.h"
+#include "LIS3DH.h"
 
 // Electron sample to print accelerometer samples to serial using the I2C interface
 //

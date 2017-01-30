@@ -1,7 +1,7 @@
 
 #include "Particle.h"
 
-#include "LIS3DH/LIS3DH.h"
+#include "LIS3DH.h"
 
 // Example of Wake On Move with the AssetTracker and the Electron
 //

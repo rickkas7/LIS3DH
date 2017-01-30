@@ -1,6 +1,6 @@
 
 #include "Particle.h"
-#include "LIS3DH/LIS3DH.h"
+#include "LIS3DH.h"
 
 // Official project location:
 // https://github.com/rickkas7/LIS3DH

@@ -1,6 +1,6 @@
 #include "Particle.h"
 
-#include "LIS3DH/LIS3DH.h"
+#include "LIS3DH.h"
 
 // Example of using the movement detection feature and SPI connection, like the asset tracker.
 // Instead of actually putting the device to sleep, this prints information which is handy
