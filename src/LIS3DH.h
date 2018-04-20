@@ -1,6 +1,8 @@
 #ifndef __LIS3DH_H
 #define __LIS3DH_H
 
+#include "Particle.h"
+
 // Interface to the LIS3DH accelerometer used on the Particle AssetTracker for Electron
 // Also supports standalone devices connected by SPI or I2C
 //
