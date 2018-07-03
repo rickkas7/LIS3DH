@@ -5,7 +5,6 @@
 - build: examples/2_Samples
   photon: [latest]
 - build: examples/3_I2C
-  photon: [latest]
   electron: [latest]
 - build: examples/4_Position
   photon: [latest]
