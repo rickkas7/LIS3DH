@@ -286,7 +286,7 @@ public:
 	static const uint8_t STATUS_ZYXDA = 0x08;
 	static const uint8_t STATUS_ZDA = 0x04;
 	static const uint8_t STATUS_YDA = 0x02;
-	static const uint8_t STATUS_ZDA = 0x01;
+	static const uint8_t STATUS_XDA = 0x01;
 
 	static const uint8_t STATUS_AUX_321OR = 0x80;
 	static const uint8_t STATUS_AUX_3OR = 0x40;

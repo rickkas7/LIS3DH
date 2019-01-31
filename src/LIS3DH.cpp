@@ -196,7 +196,7 @@ int16_t LIS3DH::getTemperature() {
 
 
 bool LIS3DH::getSample(LIS3DHSample &sample) {
-	uint8_t statusAuxReg = readRegister8(REG_STATUS);
+	uint8_t statusAuxReg = readRegister8(REG_STATUS_REG);
 
 	bool hasData = ((statusAuxReg & STATUS_ZYXDA) != 0);
 
