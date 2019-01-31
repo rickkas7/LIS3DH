@@ -16,17 +16,19 @@
 // https://github.com/rickkas7/LIS3DH
 
 /**
- * Structure to hold a single XYZ sample
+ * @brief Structure to hold a single XYZ sample
  */
 typedef struct {
-	int16_t 	x;
-	int16_t		y;
-	int16_t		z;
+	int16_t 	x; //!< acceleration in the X axis (signed)
+	int16_t		y; //!< acceleration in the Y axis (signed)
+	int16_t		z; //!< acceleration in the Z axis (signed)
 } LIS3DHSample;
 
 
 /**
- * Configuration object. You normally create one of these on the stack and then use
+ * @brief Configuration object
+ *
+ * You normally create one of these on the stack and then use
  * one of the set* methods to set the mode you want to use. The object then gets
  * passed to the setup() method. The configuration object does not need to exist
  * after the setup method returns.
@@ -38,8 +40,41 @@ class LIS3DHConfig {
 public:
 	LIS3DHConfig();
 
+	/**
+	 * @brief Sets low power wake on move mode
+	 *
+	 * @param movementThreshold Lower values are more sensitive. A common value is 16.
+	 */
 	LIS3DHConfig &setLowPowerWakeMode(uint8_t movementThreshold);
+
+	/**
+	 * @brief Sets continuous acceleration monitoring mode
+	 *
+	 * @param rate The sampling rate. Values are:
+	 *
+	 * 0  Power down mode
+	 * 1  1 Hz
+	 * 2  10 Hz
+	 * 3  25 Hz
+	 * 4  50 Hz
+	 * 5  100 Hz
+	 * 6  200 Hz
+	 * 7  400 Hz
+	 * 8  Low Power Mode (1.6 kHz)
+	 * 9  HR / normal (1.344 kHz) or low-power mode (5.376 kHz)
+	 *
+	 * You should only select values 1 - 7, the other registers are not really set up to handle the other
+	 * modes properly
+	 */
 	LIS3DHConfig &setAccelMode(uint8_t rate);
+
+	/**
+	 * @brief Sets orientation interrupt mode
+	 *
+	 * This interrupts when the orientation changes.
+	 *
+	 * @param movementThreshold Lower values are more sensitive. A common value is 16.
+	 */
 	LIS3DHConfig &setPositionInterrupt(uint8_t movementThreshold);
 
 	uint8_t reg1 = 0;
@@ -56,23 +91,37 @@ public:
 };
 
 /**
- * The LIS3DH accelerometer object base class. You cannot instantiate one of these
+ * @brief The LIS3DH accelerometer object base class.
+ *
+ * You cannot instantiate one of these
  * directly; you should instantiate either a LIS3DHSPI or LIS3DHI2C depending
  * which interface you have connected.
  */
 class LIS3DH {
 public:
+	/**
+	 * @brief Base class constructor
+	 *
+	 * @param intPin The pin the interrupt line is connected to, or -1 if not using interrupts
+	 */
 	LIS3DH(int intPin = -1);
+
+	/**
+	 * @brief Destructor
+	 *
+	 * In most cases, the LIS3DH object will be a global variable and never destructed.
+	 */
 	virtual ~LIS3DH();
 
 	/**
-	 * Returns true if the device can be found on the I2C or SPI bus. Uses
-	 * the WHOAMI register.
+	 * @brief Returns true if the device can be found on the I2C or SPI bus.
+	 *
+	 * Usesthe WHOAMI register.
 	 */
 	bool hasDevice();
 
 	/**
-	 * Initializes the device
+	 * @brief Initializes the device
 	 *
 	 * Normally you instantiate a LIS3DHConfig object on the stack and initialize it using
 	 * setupLowPowerWakeMode, setAccelMode, or setPositionInterrupt and then pass the
@@ -82,28 +131,33 @@ public:
 
 
 	/**
+	 * @brief Calibrate the gravity cancellation filter
+	 *
 	 * The movement interrupt needs to be calculated to take into account gravity and its
 	 * current orientation. For this to work, the object must be stationary. You typically
-	 * call this method before putting the device to sleep for wake-on-move. The stationnaryTime
+	 * call this method before putting the device to sleep for wake-on-move. The stationaryTime
 	 * is the amount of time the device needs to be stationary, in milliseconds. Typically, you'd
-	 * wait a few seconds. The maxWaitTime is the amount of time iin milliseconds to wait for
+	 * wait a few seconds. The maxWaitTime is the amount of time in milliseconds to wait for
 	 * the device to stop moving. 0 means wait forever.
 	 */
 	bool calibrateFilter(unsigned long stationaryTime, unsigned long maxWaitTime = 0);
 
 	/**
-	 * After getting an interrupt, call this to read the interrupt status and clear the interrupt
+	 * @brief After getting an interrupt, call this to read the interrupt status and clear the interrupt
+	 *
 	 * The resulting value is the value of the INT1_SRC register.
 	 */
 	uint8_t clearInterrupt();
 
 	/**
-	 * Enables the temperature sensor. Call once, usually after calling setup.
+	 * @brief Enables the temperature sensor. Call once, usually after calling setup.
+	 *
+	 * You need to wait a few seconds after enabling it before a valid result will be returned.
 	 */
 	void enableTemperature(boolean enable = true);
 
 	/**
-	 * Gets the temperature of the sensor in degrees C
+	 * @brief Gets the temperature of the sensor in degrees C
 	 *
 	 * Make sure you call enableTemperature() at when you're setting the modes, because it seems
 	 * to take a while to start up, you can't just keep turning it on and off all the time,
@@ -114,7 +168,7 @@ public:
 	int16_t getTemperature();
 
 	/**
-	 * Get sample is used when querying x, y, z data not using the FIFO.
+	 * @brief Get sample is used when querying x, y, z data not using the FIFO.
 	 *
 	 * The data is still only captured at the data capture rate, and this method will return false
 	 * if there is no new data to be read.
@@ -122,7 +176,7 @@ public:
 	bool getSample(LIS3DHSample &sample);
 
 	/**
-	 * When using position interrupt mode, returns the orientation of the device.
+	 * @brief When using position interrupt mode, returns the orientation of the device.
 	 *
 	 * 0 = not in a known position
 	 * 1 = position a
@@ -137,7 +191,7 @@ public:
 	uint8_t readPositionInterrupt();
 
 	/**
-	 * Reads an 8-bit register value
+	 * @brief Reads an 8-bit register value
 	 *
 	 * Most of the calls have easier to use accessors like readStatus() that use this call internally.
 	 *
@@ -146,14 +200,14 @@ public:
 	uint8_t readRegister8(uint8_t addr);
 
 	/**
-	 * Reads an 16-bit register value
+	 * @brief Reads a 16-bit register value
 	 *
 	 * addr: One of the register addresses, such as REG_THRESH_ACT_L. It must be the first of a pair of _L and _H registers.
 	 */
 	uint16_t readRegister16(uint8_t addr);
 
 	/**
-	 * Write an 8-bit register value
+	 * @brief Write an 8-bit register value
 	 *
 	 * Most of the calls have easier to use accessors like writeIntmap1() that use this call internally.
 	 *
@@ -162,7 +216,7 @@ public:
 	void writeRegister8(uint8_t addr, uint8_t value);
 
 	/**
-	 * Write an 16-bit register value
+	 * @brief Write a 16-bit register value
 	 *
 	 * Most of the calls have easier to use accessors like writeIntmap1() that use this call internally.
 	 *
@@ -172,14 +226,14 @@ public:
 
 
 	/**
-	 * Low-level read data from the device. Implemented by subclasses.
+	 * @brief Low-level read data from the device. Implemented by subclasses.
 	 *
 	 * Normally you'd use the readRegister calls.
 	 */
 	virtual bool readData(uint8_t addr, uint8_t *buf, size_t numBytes) = 0;
 
 	/**
-	 * Low-level write data from the device. Implemented by subclasses.
+	 * @brief Low-level write data from the device. Implemented by subclasses.
 	 *
 	 * Normally you'd use the writeRegister calls.
 	 */
@@ -224,6 +278,15 @@ public:
 	static const uint8_t REG_TIME_LIMIT = 0x3b;
 	static const uint8_t REG_TIME_LATENCY = 0x3c;
 	static const uint8_t REG_TIME_WINDOW = 0x3d;
+
+	static const uint8_t STATUS_ZYXOR = 0x80;
+	static const uint8_t STATUS_ZOR = 0x40;
+	static const uint8_t STATUS_YOR = 0x20;
+	static const uint8_t STATUS_XOR = 0x10;
+	static const uint8_t STATUS_ZYXDA = 0x08;
+	static const uint8_t STATUS_ZDA = 0x04;
+	static const uint8_t STATUS_YDA = 0x02;
+	static const uint8_t STATUS_ZDA = 0x01;
 
 	static const uint8_t STATUS_AUX_321OR = 0x80;
 	static const uint8_t STATUS_AUX_3OR = 0x40;
@@ -321,7 +384,7 @@ public:
 
 private:
 	int intPin; // Pin connected to INT1 on the accelerometer (-1 = not connected)
-	uint8_t int1_cfg; // What we set as INT1_CFG
+	uint8_t int1_cfg = 0; // What we set as INT1_CFG
 };
 
 /**
@@ -330,12 +393,11 @@ private:
 class LIS3DHSPI : public LIS3DH {
 public:
 	/**
-	 * Initialize the LIS3DH on an SPI port
+	 * @brief Initialize the LIS3DH on an SPI port
 	 *
-	 * spi: specifies the SPI port (SPI, SPI1, etc.)
-	 * ss: specifies the CS pin
-	 *
-	 * If the INT pin is connected to a pin, specify which one with intPin
+	 * @param spi specifies the SPI port (SPI, SPI1, etc.)
+	 * @param ss specifies the CS pin
+	 * @param intPin the pin used for the interrupt or -1 if not used
 	 */
 	LIS3DHSPI(SPIClass &spi, int ss = A2, int intPin = -1);
 	virtual ~LIS3DHSPI();

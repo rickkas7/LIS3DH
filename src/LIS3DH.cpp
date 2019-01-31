@@ -196,9 +196,9 @@ int16_t LIS3DH::getTemperature() {
 
 
 bool LIS3DH::getSample(LIS3DHSample &sample) {
-	uint8_t statusAuxReg = readRegister8(REG_STATUS_AUX);
+	uint8_t statusAuxReg = readRegister8(REG_STATUS);
 
-	bool hasData = ((statusAuxReg & STATUS_AUX_321DA) != 0);
+	bool hasData = ((statusAuxReg & STATUS_ZYXDA) != 0);
 
 	//Serial.printlnf("fifoSrcReg=0x%02x", fifoSrcReg);
 
