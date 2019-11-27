@@ -65,6 +65,11 @@ The example files show how to read actual accelerometer samples, using the posit
 
 ## Revision History
 
+#### 0.2.4
+
+- When calling setAccelMode, clear all of the settings that are set by setLowPowerWakeMode so you can switch 
+between modes at runtime.
+
 #### 0.2.3
 
 - In getSample, check the STATUS register instead of the STATUS_AUX register.

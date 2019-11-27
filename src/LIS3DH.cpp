@@ -34,6 +34,11 @@ LIS3DHConfig &LIS3DHConfig::setAccelMode(uint8_t rate) {
 	// Enable specified rate, with XYZ detection enabled
 	reg1 = rate | LIS3DH::CTRL_REG1_ZEN | LIS3DH::CTRL_REG1_YEN | LIS3DH::CTRL_REG1_XEN;
 
+	// Restore the settings set by setLowPowerWakeMode as well
+	reg2 = reg3 = reg5 = 0;
+	int1_ths = 0;
+	int1_cfg = 0;
+
 	return *this;
 }
 
