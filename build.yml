@@ -1,10 +1,9 @@
 - build: examples/1_WakeOnMove
-  photon: [0.6.3, 0.7.0, 0.8.0-rc.12, 1.0.0]
+  photon: [0.7.0, 1.0.0, 1.2.1, 1.4.4]
   p1: [latest]
-  electron: [0.6.4, 0.7.0, 0.8.0-rc.12, 1.0.0]
-  argon: [0.8.0-rc.27]
-  boron: [0.8.0-rc.27]
-  xenon: [0.8.0-rc.27]
+  electron: [0.7.0, 1.0.0]
+  argon: [latest]
+  boron: [0.9.0, latest]
 - build: examples/2_Samples
   photon: [latest]
 - build: examples/3_I2C

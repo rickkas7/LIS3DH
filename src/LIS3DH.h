@@ -118,7 +118,7 @@ public:
 	 *
 	 * Usesthe WHOAMI register.
 	 */
-	bool hasDevice();
+	virtual bool hasDevice();
 
 	/**
 	 * @brief Initializes the device
@@ -402,6 +402,8 @@ public:
 	LIS3DHSPI(SPIClass &spi, int ss = A2, int intPin = -1);
 	virtual ~LIS3DHSPI();
 
+	virtual bool hasDevice();
+
 	virtual bool readData(uint8_t addr, uint8_t *buf, size_t numBytes);
 
 	virtual bool writeData(uint8_t addr, const uint8_t *buf, size_t numBytes);
@@ -418,7 +420,8 @@ private:
 
 	SPIClass &spi; // Typically SPI or SPI1
 	int ss;		// SS or /CS chip select pin. Default: A2, -1 if using I2C
-	bool spiShared = false;
+	bool spiShared = false; // not used 
+	__SPISettings spiSettings;
 
 };
 

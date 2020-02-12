@@ -38,7 +38,7 @@ LIS3DHConfig &LIS3DHConfig::setAccelMode(uint8_t rate) {
 	reg2 = reg3 = reg5 = 0;
 	int1_ths = 0;
 	int1_cfg = 0;
-
+	
 	return *this;
 }
 
@@ -297,41 +297,32 @@ void LIS3DH::writeRegister16(uint8_t addr, uint16_t value) {
 //
 //
 
-LIS3DHSPI::LIS3DHSPI(SPIClass &spi, int ss, int intPin) : LIS3DH(intPin), spi(spi), ss(ss) {
-
-	spi.begin(ss);
-
-	if (!spiShared) {
-		spiSetup();
-	}
+LIS3DHSPI::LIS3DHSPI(SPIClass &spi, int ss, int intPin) : LIS3DH(intPin), spi(spi), ss(ss), spiSettings(10 * MHZ, MSBFIRST, SPI_MODE0) {
 }
 
 LIS3DHSPI::~LIS3DHSPI() {
 }
 
-void LIS3DHSPI::spiSetup() {
-	// The maximum SPI clock speed is 10 MHz. You can make it lower if needed
+bool LIS3DHSPI::hasDevice() {
+	spi.begin(ss);
 
-	spi.setBitOrder(MSBFIRST);
-	spi.setClockSpeed(10, MHZ);
-	spi.setDataMode(SPI_MODE0); // CPHA = 0, CPOL = 0 : MODE = 0
+	return LIS3DH::hasDevice();
+}
+
+void LIS3DHSPI::spiSetup() {
+	// No longer used; SPI transactions are always used now
 }
 
 void LIS3DHSPI::beginTransaction() {
-
-	// This doesn't work. It should, but it doesn't, and I'm not sure why.
-	if (spiShared) {
-		spiSetup();
-		// delay(10);
-	}
+	spi.beginTransaction(spiSettings);
 
 	digitalWrite(ss, LOW);
-
-	// The SPI CS setup time tsu(CS) is 6 ns, should not require a delay here
 }
 
 void LIS3DHSPI::endTransaction() {
 	digitalWrite(ss, HIGH);
+
+	spi.endTransaction();
 }
 
 bool LIS3DHSPI::readData(uint8_t addr, uint8_t *buf, size_t numBytes) {
