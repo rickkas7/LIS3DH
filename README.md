@@ -65,6 +65,10 @@ The example files show how to read actual accelerometer samples, using the posit
 
 ## Revision History
 
+#### 0.2.6
+
+- Fix compiler error for ambiguous requestFrom with 1.5.0-rc.2. 
+
 #### 0.2.5
 
 - Remove call to SPI.begin() from LIS3DHSPI constructor to avoid SOS+1 fault on 1.5.0-rc.1 and later.

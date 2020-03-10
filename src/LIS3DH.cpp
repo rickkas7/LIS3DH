@@ -389,7 +389,7 @@ bool LIS3DHI2C::readData(uint8_t addr, uint8_t *buf, size_t numBytes) {
 		return false;
 	}
 
-	wire.requestFrom((int)getI2CAddr(), numBytes);
+	wire.requestFrom(getI2CAddr(), numBytes);
 	for(size_t ii = 0; ii < numBytes && wire.available(); ii++) {
 		buf[ii] = wire.read();
 	}
