@@ -387,6 +387,13 @@ private:
 	uint8_t int1_cfg = 0; // What we set as INT1_CFG
 };
 
+// In 1.5.1-rc.1 and later, SPIClass is no longer defined. Instead use the SpiProxy class.
+#ifdef SYSTEM_VERSION_v151RC1
+typedef particle::SpiProxy<(HAL_SPI_Interface)0u> _SPIClass;
+#else
+typedef SPIClass _SPIClass;
+#endif
+
 /**
  * Implementation of the SPI interface to the LIS3DH
  */
@@ -399,7 +406,7 @@ public:
 	 * @param ss specifies the CS pin
 	 * @param intPin the pin used for the interrupt or -1 if not used
 	 */
-	LIS3DHSPI(SPIClass &spi, int ss = A2, int intPin = -1);
+	LIS3DHSPI(_SPIClass &spi, int ss = A2, int intPin = -1);
 	virtual ~LIS3DHSPI();
 
 	virtual bool hasDevice();
@@ -418,7 +425,7 @@ private:
 	virtual void beginTransaction();
 	virtual void endTransaction();
 
-	SPIClass &spi; // Typically SPI or SPI1
+	_SPIClass &spi; // Typically SPI or SPI1
 	int ss;		// SS or /CS chip select pin. Default: A2, -1 if using I2C
 	bool spiShared = false; // not used 
 	__SPISettings spiSettings;

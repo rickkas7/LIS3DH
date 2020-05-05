@@ -65,6 +65,10 @@ The example files show how to read actual accelerometer samples, using the posit
 
 ## Revision History
 
+#### 0.2.7
+
+- Fix compiler error for undefined conversion to SpiClass with 1.5.1-rc.1. 
+
 #### 0.2.6
 
 - Fix compiler error for ambiguous requestFrom with 1.5.0-rc.2. 

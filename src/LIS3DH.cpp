@@ -297,7 +297,7 @@ void LIS3DH::writeRegister16(uint8_t addr, uint16_t value) {
 //
 //
 
-LIS3DHSPI::LIS3DHSPI(SPIClass &spi, int ss, int intPin) : LIS3DH(intPin), spi(spi), ss(ss), spiSettings(10 * MHZ, MSBFIRST, SPI_MODE0) {
+LIS3DHSPI::LIS3DHSPI(_SPIClass &spi, int ss, int intPin) : LIS3DH(intPin), spi(spi), ss(ss), spiSettings(10 * MHZ, MSBFIRST, SPI_MODE0) {
 }
 
 LIS3DHSPI::~LIS3DHSPI() {

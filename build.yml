@@ -3,7 +3,7 @@
   p1: [latest]
   electron: [0.7.0, 1.0.0]
   argon: [latest]
-  boron: [0.9.0, latest]
+  boron: [0.9.0, 1.5.1-rc.1, latest]
 - build: examples/2_Samples
   photon: [latest]
 - build: examples/3_I2C
