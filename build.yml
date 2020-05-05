@@ -12,3 +12,5 @@
   photon: [latest]
 - build: examples/5_Movement
   photon: [latest]
+- build: examples/6_SPI1
+  photon: [1.5.0, 1.5.1-rc.1]
