@@ -63,6 +63,8 @@ There are examples for I2C and SPI, depending on how the device is connected, bu
 
 The example files show how to read actual accelerometer samples, using the position detection mode (determines when the accelerometer is in a stable position), using movement detection, and the wake-on-move feature.
 
+Please note that while this library allows the frequency of the LIS3DH to be set it does not currently allow the range of the device to be dynamically altered. Therefore, using this library the LIS3DH is a ±2g accelerometer.
+
 ## Revision History
 
 #### 0.2.8 (2020-05-05)
